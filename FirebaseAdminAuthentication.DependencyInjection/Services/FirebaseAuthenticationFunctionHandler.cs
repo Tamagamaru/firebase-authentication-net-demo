@@ -91,6 +91,10 @@ namespace FirebaseAdminAuthentication.DependencyInjection.Services
                     ));
                 }
                 // Other custom claims
+                else if (value is JToken jToken)
+                {
+                    newClaims.Add(new Claim(key, jToken.ToString(Newtonsoft.Json.Formatting.None)));
+                }
                 else
                 {
                     newClaims.Add(new Claim(key, value?.ToString() ?? ""));
