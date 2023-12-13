@@ -4,13 +4,12 @@ using FirebaseAdminAuthentication.DependencyInjection.Models;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
-using System.Text.Encodings.Web;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 
 namespace FirebaseAdminAuthentication.DependencyInjection.Services
 {
@@ -46,7 +45,7 @@ namespace FirebaseAdminAuthentication.DependencyInjection.Services
 
             try
             {
-                FirebaseToken firebaseToken = await FirebaseAuth.GetAuth(_firebaseApp).VerifyIdTokenAsync(token);
+                FirebaseToken firebaseToken = await FirebaseAuth.GetAuth(_firebaseApp).VerifyIdTokenAsync(token, true);
 
                 return AuthenticateResult.Success(CreateAuthenticationTicket(firebaseToken));
             }
@@ -68,13 +67,37 @@ namespace FirebaseAdminAuthentication.DependencyInjection.Services
 
         private IEnumerable<Claim> ToClaims(IReadOnlyDictionary<string, object> claims)
         {
-            return new List<Claim>
+            Dictionary<string, string> standardClaims = new Dictionary<string, string>
             {
-                new Claim(FirebaseUserClaimType.ID, claims.GetValueOrDefault("user_id", "").ToString()),
-                new Claim(FirebaseUserClaimType.EMAIL, claims.GetValueOrDefault("email", "").ToString()),
-                new Claim(FirebaseUserClaimType.EMAIL_VERIFIED, claims.GetValueOrDefault("email_verified", "").ToString()),
-                new Claim(FirebaseUserClaimType.USERNAME, claims.GetValueOrDefault("name", "").ToString()),
+                {"user_id", FirebaseUserClaimType.ID},
+                {"email", FirebaseUserClaimType.EMAIL},
+                {"email_verified", FirebaseUserClaimType.EMAIL_VERIFIED},
+                {"name", FirebaseUserClaimType.USERNAME}
             };
+
+            var newClaims = new List<Claim>();
+            
+            foreach (var (key, value) in claims)
+            {
+                if (standardClaims.TryGetValue(key, out var claimType))
+                {
+                    newClaims.Add(new Claim(claimType, value?.ToString() ?? ""));
+                }
+                // Since Firebase custom claims must have unique keys, use an array to add multiple roles to a user 
+                else if (key == ClaimTypes.Role && value is JArray roles)
+                {
+                    newClaims.AddRange(roles.Select(
+                        role => new Claim(ClaimTypes.Role, role.ToString())
+                    ));
+                }
+                // Other custom claims
+                else
+                {
+                    newClaims.Add(new Claim(key, value?.ToString() ?? ""));
+                }
+            }
+
+            return newClaims;
         }
     }
 }
