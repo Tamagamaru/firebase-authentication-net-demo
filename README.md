@@ -13,3 +13,15 @@ var claims = new Dictionary<string, object>(user.CustomClaims)
 };
 await FirebaseAuth.DefaultInstance.SetCustomUserClaimsAsync(uid, claims);
 ```
+
+This fork also adds an option to enable `FirebaseAuth.VerifyIdTokenAsync`'s `checkRevoked`
+
+To enable these changes:
+```csharp
+builder.Services.AddFirebaseAuthentication(options => 
+{
+    options.CheckRevoked = true;
+    options.GetCustomClaims = true;
+    options.SplitRoleClaimArrays = true;
+});
+```

@@ -13,7 +13,7 @@
   <PropertyGroup>
     <PackageId>FirebaseAdminAuthentication.DependencyInjection</PackageId>
     <Version>1.2.0-Tama</Version>
-    <Authors>SingletonSean, Tamagamaru</Authors>
+    <Authors>SingletonSean</Authors>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <RepositoryUrl>https://github.com/Tamagamaru/firebase-authentication-net-demo</RepositoryUrl>
     <PackageProjectUrl>https://github.com/Tamagamaru/firebase-authentication-net-demo</PackageProjectUrl>

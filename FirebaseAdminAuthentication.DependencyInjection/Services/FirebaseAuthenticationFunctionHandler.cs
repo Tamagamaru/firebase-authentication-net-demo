@@ -9,6 +9,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using FirebaseAdminAuthentication.DependencyInjection.Options;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace FirebaseAdminAuthentication.DependencyInjection.Services
@@ -24,10 +26,10 @@ namespace FirebaseAdminAuthentication.DependencyInjection.Services
             _firebaseApp = firebaseApp;
         }
 
-        public Task<AuthenticateResult> HandleAuthenticateAsync(HttpRequest request) =>
-            HandleAuthenticateAsync(request.HttpContext);
+        public Task<AuthenticateResult> HandleAuthenticateAsync(HttpRequest request, FirebaseAuthenticationSchemeOptions options) =>
+            HandleAuthenticateAsync(request.HttpContext, options);
 
-        public async Task<AuthenticateResult> HandleAuthenticateAsync(HttpContext context)
+        public async Task<AuthenticateResult> HandleAuthenticateAsync(HttpContext context, FirebaseAuthenticationSchemeOptions options)
         {
             if (!context.Request.Headers.ContainsKey("Authorization"))
             {
@@ -45,9 +47,9 @@ namespace FirebaseAdminAuthentication.DependencyInjection.Services
 
             try
             {
-                FirebaseToken firebaseToken = await FirebaseAuth.GetAuth(_firebaseApp).VerifyIdTokenAsync(token, true);
+                FirebaseToken firebaseToken = await FirebaseAuth.GetAuth(_firebaseApp).VerifyIdTokenAsync(token, options.CheckRevoked);
 
-                return AuthenticateResult.Success(CreateAuthenticationTicket(firebaseToken));
+                return AuthenticateResult.Success(CreateAuthenticationTicket(firebaseToken, options));
             }
             catch (Exception ex)
             {
@@ -55,17 +57,17 @@ namespace FirebaseAdminAuthentication.DependencyInjection.Services
             }
         }
 
-        private AuthenticationTicket CreateAuthenticationTicket(FirebaseToken firebaseToken)
+        private AuthenticationTicket CreateAuthenticationTicket(FirebaseToken firebaseToken, FirebaseAuthenticationSchemeOptions options)
         {
             ClaimsPrincipal claimsPrincipal = new ClaimsPrincipal(new List<ClaimsIdentity>()
             {
-                new ClaimsIdentity(ToClaims(firebaseToken.Claims), nameof(ClaimsIdentity))
+                new ClaimsIdentity(ToClaims(firebaseToken.Claims, options), nameof(ClaimsIdentity))
             });
 
             return new AuthenticationTicket(claimsPrincipal, JwtBearerDefaults.AuthenticationScheme);
         }
 
-        private IEnumerable<Claim> ToClaims(IReadOnlyDictionary<string, object> claims)
+        private IEnumerable<Claim> ToClaims(IReadOnlyDictionary<string, object> claims, FirebaseAuthenticationSchemeOptions options)
         {
             Dictionary<string, string> standardClaims = new Dictionary<string, string>
             {
@@ -84,20 +86,23 @@ namespace FirebaseAdminAuthentication.DependencyInjection.Services
                     newClaims.Add(new Claim(claimType, value?.ToString() ?? ""));
                 }
                 // Since Firebase custom claims must have unique keys, use an array to add multiple roles to a user 
-                else if (key == ClaimTypes.Role && value is JArray roles)
+                else if (options.SplitRoleClaimArrays && key == ClaimTypes.Role && value is JArray roles)
                 {
                     newClaims.AddRange(roles.Select(
                         role => new Claim(ClaimTypes.Role, role.ToString())
                     ));
                 }
                 // Other custom claims
-                else if (value is JToken jToken)
+                else if (options.GetCustomClaims)
                 {
-                    newClaims.Add(new Claim(key, jToken.ToString(Newtonsoft.Json.Formatting.None)));
-                }
-                else
-                {
-                    newClaims.Add(new Claim(key, value?.ToString() ?? ""));
+                    if (value is JToken jToken)
+                    {
+                        newClaims.Add(new Claim(key, JsonConvert.SerializeObject(jToken)));
+                    }
+                    else
+                    {
+                        newClaims.Add(new Claim(key, value?.ToString() ?? ""));
+                    }
                 }
             }
 
